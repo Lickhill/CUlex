@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      mongo:
+        image: mongo:7
+        ports: ['27017:27017']
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })' || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Backend - build & test
+        env:
+          JWT_SECRET: change_me_to_a_super_long_secure_secret_key_that_is_at_least_64_characters_long
+        run: |
+          ./mvnw -v
+          ./mvnw -q -DskipTests=false clean verify
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: culex-frontend/package-lock.json
+
+      - name: Frontend - install
+        working-directory: culex-frontend
+        run: npm ci
+
+      - name: Frontend - build
+        working-directory: culex-frontend
+        env:
+          VITE_API_BASE_URL: http://localhost:8080
+        run: npm run build
