@@ -46,8 +46,10 @@ Notes:
 Directory Structure
 ================================================================
 .gitattributes
+.github/workflows/ci.yml
 .gitignore
 .mvn/wrapper/maven-wrapper.properties
+.nvmrc
 culex-frontend/.gitignore
 culex-frontend/eslint.config.js
 culex-frontend/index.html
@@ -66,7 +68,9 @@ culex-frontend/vite.config.js
 mvnw
 mvnw.cmd
 pom.xml
+README.md
 src/main/java/com/culex/culex/config/SecurityConfig.java
+src/main/java/com/culex/culex/controller/AdController.java
 src/main/java/com/culex/culex/controller/AuthController.java
 src/main/java/com/culex/culex/controller/TestController.java
 src/main/java/com/culex/culex/CulexApplication.java
@@ -74,8 +78,11 @@ src/main/java/com/culex/culex/dto/AuthResponse.java
 src/main/java/com/culex/culex/dto/LoginRequest.java
 src/main/java/com/culex/culex/dto/RegisterRequest.java
 src/main/java/com/culex/culex/exception/GlobalExceptionHandler.java
+src/main/java/com/culex/culex/model/Ad.java
 src/main/java/com/culex/culex/model/User.java
+src/main/java/com/culex/culex/repository/AdRepository.java
 src/main/java/com/culex/culex/repository/UserRepository.java
+src/main/java/com/culex/culex/service/AdService.java
 src/main/java/com/culex/culex/service/AuthService.java
 src/main/java/com/culex/culex/util/JwtUtil.java
 src/main/resources/application.properties
@@ -86,19 +93,220 @@ Files
 ================================================================
 
 ================
+File: src/main/java/com/culex/culex/controller/AdController.java
+================
+package com.culex.culex.controller;
+
+import com.culex.culex.model.Ad;
+import com.culex.culex.service.AdService;
+import com.culex.culex.util.JwtUtil;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.http.MediaType;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/ads")
+@CrossOrigin(origins = { "http://localhost:5173", "http://127.0.0.1:5173" }, allowCredentials = "true")
+public class AdController {
+
+    @Autowired
+    private AdService adService;
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @GetMapping
+    public ResponseEntity<List<Ad>> getAllAds() {
+        List<Ad> ads = adService.getAllAds();
+        return ResponseEntity.ok(ads);
+    }
+
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Ad> createAd(@RequestHeader("Authorization") String token, @RequestBody Ad ad) {
+        try {
+            String email = jwtUtil.getEmailFromToken(token.substring(7));
+            ad.setUserId(email);
+            Ad createdAd = adService.createAd(ad);
+            return new ResponseEntity<>(createdAd, HttpStatus.CREATED);
+        } catch (Exception e) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+    }
+}
+
+================
+File: src/main/java/com/culex/culex/model/Ad.java
+================
+package com.culex.culex.model;
+
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+import java.time.LocalDateTime;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Document(collection = "ads")
+public class Ad {
+    @Id
+    private String id;
+    private String name;
+    private String description;
+    private String address;
+    private String phoneNumber;
+    private String userId; // To link the ad to the user who posted it
+    private LocalDateTime createdAt;
+}
+
+================
+File: src/main/java/com/culex/culex/repository/AdRepository.java
+================
+package com.culex.culex.repository;
+
+import com.culex.culex.model.Ad;
+import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface AdRepository extends MongoRepository<Ad, String> {
+}
+
+================
+File: src/main/java/com/culex/culex/service/AdService.java
+================
+package com.culex.culex.service;
+
+import com.culex.culex.model.Ad;
+import com.culex.culex.repository.AdRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Service
+public class AdService {
+
+    @Autowired
+    private AdRepository adRepository;
+
+    public List<Ad> getAllAds() {
+        return adRepository.findAll();
+    }
+
+    public Ad createAd(Ad ad) {
+        ad.setCreatedAt(LocalDateTime.now());
+        return adRepository.save(ad);
+    }
+}
+
+================
 File: .gitattributes
 ================
 /mvnw text eol=lf
 *.cmd text eol=crlf
 
 ================
+File: .github/workflows/ci.yml
+================
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      mongo:
+        image: mongo:7
+        ports: ['27017:27017']
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })' || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Backend - build & test
+        env:
+          JWT_SECRET: change_me_to_a_super_long_secure_secret_key_that_is_at_least_64_characters_long
+        run: |
+          ./mvnw -v
+          ./mvnw -q -DskipTests=false clean verify
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: culex-frontend/package-lock.json
+
+      - name: Frontend - install
+        working-directory: culex-frontend
+        run: npm ci
+
+      - name: Frontend - build
+        working-directory: culex-frontend
+        env:
+          VITE_API_BASE_URL: http://localhost:8080
+        run: npm run build
+
+================
 File: .gitignore
 ================
 HELP.md
+.target/
+
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+
+### Secrets / Env ###
+.env
+.env.*
+**/.env
+**/.env.*
+*.local
+
+### Logs ###
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 ### STS ###
 .apt_generated
@@ -128,6 +336,12 @@ build/
 ### VS Code ###
 .vscode/
 
+### Frontend ###
+/culex-frontend/node_modules/
+/culex-frontend/dist/
+/culex-frontend/dist-ssr/
+/culex-frontend/.vite/
+
 ================
 File: .mvn/wrapper/maven-wrapper.properties
 ================
@@ -150,6 +364,11 @@ File: .mvn/wrapper/maven-wrapper.properties
 wrapperVersion=3.3.2
 distributionType=only-script
 distributionUrl=https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.11/apache-maven-3.9.11-bin.zip
+
+================
+File: .nvmrc
+================
+22
 
 ================
 File: culex-frontend/.gitignore
@@ -330,6 +549,17 @@ function App() {
 		<Router>
 			<div className="min-h-screen bg-gray-50">
 				<Routes>
+					{/* The root path now always goes to the dashboard,
+                        passing the authentication status as a prop. */}
+					<Route
+						path="/"
+						element={
+							<Dashboard
+								isAuthenticated={isAuthenticated}
+								setIsAuthenticated={setIsAuthenticated}
+							/>
+						}
+					/>
 					<Route
 						path="/login"
 						element={
@@ -338,7 +568,7 @@ function App() {
 									setIsAuthenticated={setIsAuthenticated}
 								/>
 							) : (
-								<Navigate to="/dashboard" />
+								<Navigate to="/" />
 							)
 						}
 					/>
@@ -350,27 +580,17 @@ function App() {
 									setIsAuthenticated={setIsAuthenticated}
 								/>
 							) : (
-								<Navigate to="/dashboard" />
+								<Navigate to="/" />
 							)
 						}
 					/>
+					{/* The /dashboard route now simply renders the dashboard. */}
 					<Route
 						path="/dashboard"
 						element={
-							isAuthenticated ? (
-								<Dashboard
-									setIsAuthenticated={setIsAuthenticated}
-								/>
-							) : (
-								<Navigate to="/login" />
-							)
-						}
-					/>
-					<Route
-						path="/"
-						element={
-							<Navigate
-								to={isAuthenticated ? "/dashboard" : "/login"}
+							<Dashboard
+								isAuthenticated={isAuthenticated}
+								setIsAuthenticated={setIsAuthenticated}
 							/>
 						}
 					/>
@@ -391,21 +611,97 @@ File: culex-frontend/src/assets/react.svg
 File: culex-frontend/src/components/Dashboard.jsx
 ================
 import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
 
-const Dashboard = ({ setIsAuthenticated }) => {
+const Dashboard = ({ isAuthenticated, setIsAuthenticated }) => {
+	// useNavigate hook for programmatic navigation
+	const navigate = useNavigate();
 	const [user, setUser] = useState(null);
+	const [ads, setAds] = useState([]);
+	const [showAdForm, setShowAdForm] = useState(false);
+	const [newAdData, setNewAdData] = useState({
+		name: "",
+		description: "",
+		address: "",
+		phoneNumber: "",
+	});
+
+	// Function to fetch all public ads from the backend
+	const fetchAllAds = async () => {
+		try {
+			const response = await axios.get("http://localhost:8080/api/ads");
+			setAds(response.data);
+		} catch (error) {
+			console.error("Failed to fetch ads:", error);
+			// Optionally set an error state here to display to the user
+		}
+	};
 
 	useEffect(() => {
-		const userData = localStorage.getItem("user");
-		if (userData) {
-			setUser(JSON.parse(userData));
+		if (isAuthenticated) {
+			const userData = localStorage.getItem("user");
+			if (userData) {
+				setUser(JSON.parse(userData));
+			}
 		}
-	}, []);
+		// Fetch all ads on component mount for all users
+		fetchAllAds();
+	}, [isAuthenticated]);
+
+	// Handle form input changes for the new ad
+	const handleAdChange = (e) => {
+		setNewAdData({
+			...newAdData,
+			[e.target.name]: e.target.value,
+		});
+	};
+
+	// Handle the ad submission
+	const handleAdSubmit = async (e) => {
+		e.preventDefault();
+		try {
+			// Send the new ad data to the backend API
+			const token = localStorage.getItem("token");
+			await axios.post("http://localhost:8080/api/ads", newAdData, {
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			});
+
+			// After successful submission, clear the form, hide it, and refresh the ad list
+			setNewAdData({
+				name: "",
+				description: "",
+				address: "",
+				phoneNumber: "",
+			});
+			setShowAdForm(false);
+			fetchAllAds(); // Fetch the updated list of ads
+			alert("Your ad has been posted!");
+		} catch (error) {
+			console.error("Failed to post ad:", error);
+			alert(
+				error.response?.data?.message ||
+					"Failed to post ad. Please try again."
+			);
+		}
+	};
 
 	const handleLogout = () => {
 		localStorage.removeItem("token");
 		localStorage.removeItem("user");
 		setIsAuthenticated(false);
+	};
+
+	const handlePostAdClick = () => {
+		if (!isAuthenticated) {
+			// Redirect to login if not authenticated
+			navigate("/login");
+		} else {
+			// Show the ad creation form
+			setShowAdForm(true);
+		}
 	};
 
 	return (
@@ -420,15 +716,35 @@ const Dashboard = ({ setIsAuthenticated }) => {
 							</h1>
 						</div>
 						<div className="flex items-center space-x-4">
-							<span className="text-gray-700">
-								Welcome, {user?.firstName} {user?.lastName}
-							</span>
-							<button
-								onClick={handleLogout}
-								className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-							>
-								Logout
-							</button>
+							{/* Conditional rendering for the top-right buttons */}
+							{isAuthenticated ? (
+								<>
+									<span className="text-gray-700">
+										Welcome, {user?.firstName}
+									</span>
+									<button
+										onClick={handleLogout}
+										className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+									>
+										Logout
+									</button>
+								</>
+							) : (
+								<>
+									<Link
+										to="/login"
+										className="text-indigo-600 hover:text-indigo-900 font-medium"
+									>
+										Login
+									</Link>
+									<Link
+										to="/register"
+										className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+									>
+										Register
+									</Link>
+								</>
+							)}
 						</div>
 					</div>
 				</div>
@@ -447,65 +763,182 @@ const Dashboard = ({ setIsAuthenticated }) => {
 								community!
 							</p>
 
-							{/* User Info Card */}
-							<div className="bg-white shadow rounded-lg p-6 max-w-md mx-auto">
-								<h3 className="text-lg font-medium text-gray-900 mb-4">
-									Your Profile
-								</h3>
-								<div className="space-y-2">
-									<p className="text-sm text-gray-600">
-										<span className="font-medium">
-											Name:
-										</span>{" "}
-										{user?.firstName} {user?.lastName}
-									</p>
-									<p className="text-sm text-gray-600">
-										<span className="font-medium">
-											Email:
-										</span>{" "}
-										{user?.email}
-									</p>
+							{/* Conditional rendering for the ad posting form */}
+							{showAdForm ? (
+								<div className="bg-white shadow rounded-lg p-6 max-w-lg mx-auto">
+									<h3 className="text-xl font-medium text-gray-900 mb-4">
+										Post a New Ad
+									</h3>
+									<form
+										onSubmit={handleAdSubmit}
+										className="space-y-4 text-left"
+									>
+										<div>
+											<label
+												htmlFor="name"
+												className="block text-sm font-medium text-gray-700"
+											>
+												Name
+											</label>
+											<input
+												type="text"
+												id="name"
+												name="name"
+												value={newAdData.name}
+												onChange={handleAdChange}
+												required
+												className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+											/>
+										</div>
+										<div>
+											<label
+												htmlFor="description"
+												className="block text-sm font-medium text-gray-700"
+											>
+												Description
+											</label>
+											<textarea
+												id="description"
+												name="description"
+												value={newAdData.description}
+												onChange={handleAdChange}
+												required
+												className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+											></textarea>
+										</div>
+										<div>
+											<label
+												htmlFor="address"
+												className="block text-sm font-medium text-gray-700"
+											>
+												Address of Seller
+											</label>
+											<input
+												type="text"
+												id="address"
+												name="address"
+												value={newAdData.address}
+												onChange={handleAdChange}
+												required
+												className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+											/>
+										</div>
+										<div>
+											<label
+												htmlFor="phoneNumber"
+												className="block text-sm font-medium text-gray-700"
+											>
+												Phone Number
+											</label>
+											<input
+												type="tel"
+												id="phoneNumber"
+												name="phoneNumber"
+												value={newAdData.phoneNumber}
+												onChange={handleAdChange}
+												required
+												className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+											/>
+										</div>
+										<div className="flex justify-between">
+											<button
+												type="button"
+												onClick={() =>
+													setShowAdForm(false)
+												}
+												className="py-2 px-4 border border-transparent text-sm font-medium rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+											>
+												Cancel
+											</button>
+											<button
+												type="submit"
+												className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+											>
+												Submit Ad
+											</button>
+										</div>
+									</form>
 								</div>
-							</div>
-
-							{/* Quick Actions */}
-							<div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-								<div className="bg-white shadow rounded-lg p-6">
-									<h4 className="text-lg font-medium text-gray-900 mb-2">
-										Post an Ad
-									</h4>
-									<p className="text-gray-600 text-sm mb-4">
-										Sell your items to the CU community
-									</p>
-									<button className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">
-										Create Listing
-									</button>
-								</div>
-
-								<div className="bg-white shadow rounded-lg p-6">
-									<h4 className="text-lg font-medium text-gray-900 mb-2">
-										Browse Items
-									</h4>
-									<p className="text-gray-600 text-sm mb-4">
-										Find what you're looking for
-									</p>
-									<button className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-										View Listings
-									</button>
-								</div>
-
-								<div className="bg-white shadow rounded-lg p-6">
-									<h4 className="text-lg font-medium text-gray-900 mb-2">
-										My Account
-									</h4>
-									<p className="text-gray-600 text-sm mb-4">
-										Manage your profile and settings
-									</p>
-									<button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">
-										Edit Profile
-									</button>
-								</div>
-							</div>
+							) : (
+								<>
+									{/* Quick Actions */}
+									<div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+										<div className="bg-white shadow rounded-lg p-6">
+											<h4 className="text-lg font-medium text-gray-900 mb-2">
+												Post an Ad
+											</h4>
+											<p className="text-gray-600 text-sm mb-4">
+												Sell your items to the CU
+												community
+											</p>
+											<button
+												onClick={handlePostAdClick}
+												className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded"
+											>
+												Create Listing
+											</button>
+										</div>
+										<div className="bg-white shadow rounded-lg p-6">
+											<h4 className="text-lg font-medium text-gray-900 mb-2">
+												Browse Items
+											</h4>
+											<p className="text-gray-600 text-sm mb-4">
+												Find what you're looking for
+											</p>
+											<button className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+												View Listings
+											</button>
+										</div>
+										{isAuthenticated && (
+											<div className="bg-white shadow rounded-lg p-6">
+												<h4 className="text-lg font-medium text-gray-900 mb-2">
+													My Account
+												</h4>
+												<p className="text-gray-600 text-sm mb-4">
+													Manage your profile and
+													settings
+												</p>
+												<button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">
+													Edit Profile
+												</button>
+											</div>
+										)}
+									</div>
+									{/* Ads Display Section */}
+									<div className="mt-12">
+										<h3 className="text-2xl font-bold text-gray-900 mb-6">
+											Recent Listings
+										</h3>
+										<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+											{ads.map((ad) => (
+												<div
+													key={ad.id}
+													className="bg-white rounded-lg shadow-md p-6"
+												>
+													<h4 className="text-xl font-semibold text-gray-900 mb-2">
+														{ad.name}
+													</h4>
+													<p className="text-gray-600 mb-4">
+														{ad.description}
+													</p>
+													<p className="text-sm text-gray-500">
+														<span className="font-medium">
+															Seller Address:
+														</span>{" "}
+														{ad.address}
+													</p>
+													<p className="text-sm text-gray-500">
+														<span className="font-medium">
+															Contact:
+														</span>{" "}
+														{ad.phoneNumber}
+													</p>
+												</div>
+											))}
+										</div>
+									</div>
+								</>
+							)}
 						</div>
 					</div>
 				</div>
@@ -656,6 +1089,7 @@ import { Link } from "react-router-dom";
 import axios from "axios";
 
 const Register = ({ setIsAuthenticated }) => {
+	// State to manage form input values
 	const [formData, setFormData] = useState({
 		firstName: "",
 		lastName: "",
@@ -663,9 +1097,12 @@ const Register = ({ setIsAuthenticated }) => {
 		password: "",
 		phoneNumber: "",
 	});
+	// State to store and display error messages
 	const [error, setError] = useState("");
+	// State to manage the loading state of the form submission
 	const [loading, setLoading] = useState(false);
 
+	// Handler for updating form state on input change
 	const handleChange = (e) => {
 		setFormData({
 			...formData,
@@ -673,10 +1110,11 @@ const Register = ({ setIsAuthenticated }) => {
 		});
 	};
 
+	// Handler for form submission
 	const handleSubmit = async (e) => {
 		e.preventDefault();
 		setLoading(true);
-		setError("");
+		setError(""); // Clear previous errors
 
 		try {
 			const response = await axios.post(
@@ -684,7 +1122,9 @@ const Register = ({ setIsAuthenticated }) => {
 				formData
 			);
 
+			// Check if the response contains a token, indicating success
 			if (response.data.token) {
+				// Store the token and user data in local storage
 				localStorage.setItem("token", response.data.token);
 				localStorage.setItem(
 					"user",
@@ -694,11 +1134,15 @@ const Register = ({ setIsAuthenticated }) => {
 						lastName: response.data.lastName,
 					})
 				);
+				// Update authentication state to redirect to the dashboard
 				setIsAuthenticated(true);
 			} else {
+				// If there's no token but a message, use that message
 				setError(response.data.message || "Registration failed");
 			}
 		} catch (err) {
+			// Updated error handling to get the specific message from the backend response
+			// This provides a more informative error to the user, e.g., "User with this email already exists"
 			setError(
 				err.response?.data?.message ||
 					"Registration failed. Please try again."
@@ -1407,12 +1851,54 @@ File: pom.xml
 </project>
 
 ================
+File: README.md
+================
+# Culex
+
+Full-stack app with Spring Boot (MongoDB) and React + Vite (Tailwind).
+
+## Prerequisites
+- Java 21+ (Java 24 used here)
+- Node.js 22.12+ (or >=20.19.0). See `.nvmrc`.
+- MongoDB running on `mongodb://localhost:27017`
+
+## Backend (Spring Boot)
+- Configure JWT secret (at least 64 chars):
+  - Windows PowerShell: `$env:JWT_SECRET = "your_super_long_secret"`
+  - Bash: `export JWT_SECRET=your_super_long_secret`
+- Run:
+  - Bash: `./mvnw spring-boot:run`
+  - Windows cmd: `mvnw.cmd spring-boot:run`
+- API base: `http://localhost:8080`
+
+## Frontend (Vite + React)
+- Create `culex-frontend/.env` (optional):
+  - `VITE_API_BASE_URL=http://localhost:8080`
+- Install deps and run dev server:
+  - `cd culex-frontend`
+  - `npm ci`
+  - `npm run dev`
+- App runs at `http://localhost:5173`
+
+## Auth Endpoints
+- `POST /api/auth/register` { email, password, firstName, lastName, phoneNumber? }
+- `POST /api/auth/login` { email, password }
+
+## Production Notes
+- Set `JWT_SECRET` via environment (never commit real secrets).
+- Tighten CORS and Security rules in `SecurityConfig` before production.
+
+## CI
+- GitHub Actions workflow builds backend and frontend under `.github/workflows/ci.yml`.
+
+================
 File: src/main/java/com/culex/culex/config/SecurityConfig.java
 ================
 package com.culex.culex.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -1422,7 +1908,6 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.http.HttpMethod;
 
 import java.util.Arrays;
 import java.util.List;
@@ -1446,9 +1931,10 @@ public class SecurityConfig {
                 .formLogin(form -> form.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/auth/**", "/api/test", "/error").permitAll()
-                        // Permit all endpoints during development to avoid 403s
-                        .anyRequest().permitAll());
+                        // Publicly accessible endpoints
+                        .requestMatchers("/api/auth/**", "/api/test", "/api/ads").permitAll()
+                        // All other requests require authentication
+                        .anyRequest().authenticated());
         return http.build();
     }
 
@@ -1638,6 +2124,7 @@ public class RegisterRequest {
     @NotBlank(message = "Last name is required")
     private String lastName;
 
+    // The new field for the phone number
     private String phoneNumber;
 }
 
@@ -1786,6 +2273,7 @@ public class AuthService {
                     passwordEncoder.encode(request.getPassword()),
                     request.getFirstName(),
                     request.getLastName(),
+                    // Pass the phoneNumber from the request
                     request.getPhoneNumber());
 
             User savedUser = userRepository.save(user);
@@ -1905,20 +2393,16 @@ spring.data.mongodb.port=27017
 spring.data.mongodb.database=culex_db
 
 # JWT Configuration
-jwt.secret=culexSecretKeyForJWTTokenGenerationAndValidation2024
+# Provide the secret from environment variable JWT_SECRET in production.
+# The fallback is for local development only. Must be at least 64 chars for HS512.
+jwt.secret=${JWT_SECRET:change_me_to_a_super_long_secure_secret_key_that_is_at_least_64_characters_long}
 jwt.expiration=86400000
 
 # Server Configuration
 server.port=8080
 
-# CORS Configuration
-cors.allowed-origins=http://localhost:5173
-
-# Spring Web CORS (applied by MVC)
-spring.web.cors.allowed-origins=http://localhost:5173,http://127.0.0.1:5173
-spring.web.cors.allowed-methods=GET,POST,PUT,DELETE,OPTIONS
-spring.web.cors.allowed-headers=*
-spring.web.cors.allow-credentials=true
+# CORS is configured in SecurityConfig. Remove duplicate/unknown properties below.
+# (If you need to customize, do it in SecurityConfig.java)
 
 ================
 File: src/test/java/com/culex/culex/CulexApplicationTests.java

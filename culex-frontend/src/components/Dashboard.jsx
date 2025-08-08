@@ -1,19 +1,95 @@
 import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
 
-const Dashboard = ({ setIsAuthenticated }) => {
+const Dashboard = ({ isAuthenticated, setIsAuthenticated }) => {
+	// useNavigate hook for programmatic navigation
+	const navigate = useNavigate();
 	const [user, setUser] = useState(null);
+	const [ads, setAds] = useState([]);
+	const [showAdForm, setShowAdForm] = useState(false);
+	const [newAdData, setNewAdData] = useState({
+		name: "",
+		description: "",
+		address: "",
+		phoneNumber: "",
+	});
+
+	// Function to fetch all public ads from the backend
+	const fetchAllAds = async () => {
+		try {
+			const response = await axios.get("http://localhost:8080/api/ads");
+			setAds(response.data);
+		} catch (error) {
+			console.error("Failed to fetch ads:", error);
+			// Optionally set an error state here to display to the user
+		}
+	};
 
 	useEffect(() => {
-		const userData = localStorage.getItem("user");
-		if (userData) {
-			setUser(JSON.parse(userData));
+		if (isAuthenticated) {
+			const userData = localStorage.getItem("user");
+			if (userData) {
+				setUser(JSON.parse(userData));
+			}
 		}
-	}, []);
+		// Fetch all ads on component mount for all users
+		fetchAllAds();
+	}, [isAuthenticated]);
+
+	// Handle form input changes for the new ad
+	const handleAdChange = (e) => {
+		setNewAdData({
+			...newAdData,
+			[e.target.name]: e.target.value,
+		});
+	};
+
+	// Handle the ad submission
+	const handleAdSubmit = async (e) => {
+		e.preventDefault();
+		try {
+			// Send the new ad data to the backend API
+			const token = localStorage.getItem("token");
+			await axios.post("http://localhost:8080/api/ads", newAdData, {
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			});
+
+			// After successful submission, clear the form, hide it, and refresh the ad list
+			setNewAdData({
+				name: "",
+				description: "",
+				address: "",
+				phoneNumber: "",
+			});
+			setShowAdForm(false);
+			fetchAllAds(); // Fetch the updated list of ads
+			alert("Your ad has been posted!");
+		} catch (error) {
+			console.error("Failed to post ad:", error);
+			alert(
+				error.response?.data?.message ||
+					"Failed to post ad. Please try again."
+			);
+		}
+	};
 
 	const handleLogout = () => {
 		localStorage.removeItem("token");
 		localStorage.removeItem("user");
 		setIsAuthenticated(false);
+	};
+
+	const handlePostAdClick = () => {
+		if (!isAuthenticated) {
+			// Redirect to login if not authenticated
+			navigate("/login");
+		} else {
+			// Show the ad creation form
+			setShowAdForm(true);
+		}
 	};
 
 	return (
@@ -28,15 +104,35 @@ const Dashboard = ({ setIsAuthenticated }) => {
 							</h1>
 						</div>
 						<div className="flex items-center space-x-4">
-							<span className="text-gray-700">
-								Welcome, {user?.firstName} {user?.lastName}
-							</span>
-							<button
-								onClick={handleLogout}
-								className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-							>
-								Logout
-							</button>
+							{/* Conditional rendering for the top-right buttons */}
+							{isAuthenticated ? (
+								<>
+									<span className="text-gray-700">
+										Welcome, {user?.firstName}
+									</span>
+									<button
+										onClick={handleLogout}
+										className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+									>
+										Logout
+									</button>
+								</>
+							) : (
+								<>
+									<Link
+										to="/login"
+										className="text-indigo-600 hover:text-indigo-900 font-medium"
+									>
+										Login
+									</Link>
+									<Link
+										to="/register"
+										className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+									>
+										Register
+									</Link>
+								</>
+							)}
 						</div>
 					</div>
 				</div>
@@ -55,65 +151,182 @@ const Dashboard = ({ setIsAuthenticated }) => {
 								community!
 							</p>
 
-							{/* User Info Card */}
-							<div className="bg-white shadow rounded-lg p-6 max-w-md mx-auto">
-								<h3 className="text-lg font-medium text-gray-900 mb-4">
-									Your Profile
-								</h3>
-								<div className="space-y-2">
-									<p className="text-sm text-gray-600">
-										<span className="font-medium">
-											Name:
-										</span>{" "}
-										{user?.firstName} {user?.lastName}
-									</p>
-									<p className="text-sm text-gray-600">
-										<span className="font-medium">
-											Email:
-										</span>{" "}
-										{user?.email}
-									</p>
+							{/* Conditional rendering for the ad posting form */}
+							{showAdForm ? (
+								<div className="bg-white shadow rounded-lg p-6 max-w-lg mx-auto">
+									<h3 className="text-xl font-medium text-gray-900 mb-4">
+										Post a New Ad
+									</h3>
+									<form
+										onSubmit={handleAdSubmit}
+										className="space-y-4 text-left"
+									>
+										<div>
+											<label
+												htmlFor="name"
+												className="block text-sm font-medium text-gray-700"
+											>
+												Name
+											</label>
+											<input
+												type="text"
+												id="name"
+												name="name"
+												value={newAdData.name}
+												onChange={handleAdChange}
+												required
+												className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+											/>
+										</div>
+										<div>
+											<label
+												htmlFor="description"
+												className="block text-sm font-medium text-gray-700"
+											>
+												Description
+											</label>
+											<textarea
+												id="description"
+												name="description"
+												value={newAdData.description}
+												onChange={handleAdChange}
+												required
+												className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+											></textarea>
+										</div>
+										<div>
+											<label
+												htmlFor="address"
+												className="block text-sm font-medium text-gray-700"
+											>
+												Address of Seller
+											</label>
+											<input
+												type="text"
+												id="address"
+												name="address"
+												value={newAdData.address}
+												onChange={handleAdChange}
+												required
+												className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+											/>
+										</div>
+										<div>
+											<label
+												htmlFor="phoneNumber"
+												className="block text-sm font-medium text-gray-700"
+											>
+												Phone Number
+											</label>
+											<input
+												type="tel"
+												id="phoneNumber"
+												name="phoneNumber"
+												value={newAdData.phoneNumber}
+												onChange={handleAdChange}
+												required
+												className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+											/>
+										</div>
+										<div className="flex justify-between">
+											<button
+												type="button"
+												onClick={() =>
+													setShowAdForm(false)
+												}
+												className="py-2 px-4 border border-transparent text-sm font-medium rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+											>
+												Cancel
+											</button>
+											<button
+												type="submit"
+												className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+											>
+												Submit Ad
+											</button>
+										</div>
+									</form>
 								</div>
-							</div>
-
-							{/* Quick Actions */}
-							<div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-								<div className="bg-white shadow rounded-lg p-6">
-									<h4 className="text-lg font-medium text-gray-900 mb-2">
-										Post an Ad
-									</h4>
-									<p className="text-gray-600 text-sm mb-4">
-										Sell your items to the CU community
-									</p>
-									<button className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">
-										Create Listing
-									</button>
-								</div>
-
-								<div className="bg-white shadow rounded-lg p-6">
-									<h4 className="text-lg font-medium text-gray-900 mb-2">
-										Browse Items
-									</h4>
-									<p className="text-gray-600 text-sm mb-4">
-										Find what you're looking for
-									</p>
-									<button className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-										View Listings
-									</button>
-								</div>
-
-								<div className="bg-white shadow rounded-lg p-6">
-									<h4 className="text-lg font-medium text-gray-900 mb-2">
-										My Account
-									</h4>
-									<p className="text-gray-600 text-sm mb-4">
-										Manage your profile and settings
-									</p>
-									<button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">
-										Edit Profile
-									</button>
-								</div>
-							</div>
+							) : (
+								<>
+									{/* Quick Actions */}
+									<div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+										<div className="bg-white shadow rounded-lg p-6">
+											<h4 className="text-lg font-medium text-gray-900 mb-2">
+												Post an Ad
+											</h4>
+											<p className="text-gray-600 text-sm mb-4">
+												Sell your items to the CU
+												community
+											</p>
+											<button
+												onClick={handlePostAdClick}
+												className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded"
+											>
+												Create Listing
+											</button>
+										</div>
+										<div className="bg-white shadow rounded-lg p-6">
+											<h4 className="text-lg font-medium text-gray-900 mb-2">
+												Browse Items
+											</h4>
+											<p className="text-gray-600 text-sm mb-4">
+												Find what you're looking for
+											</p>
+											<button className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+												View Listings
+											</button>
+										</div>
+										{isAuthenticated && (
+											<div className="bg-white shadow rounded-lg p-6">
+												<h4 className="text-lg font-medium text-gray-900 mb-2">
+													My Account
+												</h4>
+												<p className="text-gray-600 text-sm mb-4">
+													Manage your profile and
+													settings
+												</p>
+												<button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">
+													Edit Profile
+												</button>
+											</div>
+										)}
+									</div>
+									{/* Ads Display Section */}
+									<div className="mt-12">
+										<h3 className="text-2xl font-bold text-gray-900 mb-6">
+											Recent Listings
+										</h3>
+										<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+											{ads.map((ad) => (
+												<div
+													key={ad.id}
+													className="bg-white rounded-lg shadow-md p-6"
+												>
+													<h4 className="text-xl font-semibold text-gray-900 mb-2">
+														{ad.name}
+													</h4>
+													<p className="text-gray-600 mb-4">
+														{ad.description}
+													</p>
+													<p className="text-sm text-gray-500">
+														<span className="font-medium">
+															Seller Address:
+														</span>{" "}
+														{ad.address}
+													</p>
+													<p className="text-sm text-gray-500">
+														<span className="font-medium">
+															Contact:
+														</span>{" "}
+														{ad.phoneNumber}
+													</p>
+												</div>
+											))}
+										</div>
+									</div>
+								</>
+							)}
 						</div>
 					</div>
 				</div>

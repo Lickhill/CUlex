@@ -35,6 +35,17 @@ function App() {
 		<Router>
 			<div className="min-h-screen bg-gray-50">
 				<Routes>
+					{/* The root path now always goes to the dashboard,
+                        passing the authentication status as a prop. */}
+					<Route
+						path="/"
+						element={
+							<Dashboard
+								isAuthenticated={isAuthenticated}
+								setIsAuthenticated={setIsAuthenticated}
+							/>
+						}
+					/>
 					<Route
 						path="/login"
 						element={
@@ -43,7 +54,7 @@ function App() {
 									setIsAuthenticated={setIsAuthenticated}
 								/>
 							) : (
-								<Navigate to="/dashboard" />
+								<Navigate to="/" />
 							)
 						}
 					/>
@@ -55,27 +66,17 @@ function App() {
 									setIsAuthenticated={setIsAuthenticated}
 								/>
 							) : (
-								<Navigate to="/dashboard" />
+								<Navigate to="/" />
 							)
 						}
 					/>
+					{/* The /dashboard route now simply renders the dashboard. */}
 					<Route
 						path="/dashboard"
 						element={
-							isAuthenticated ? (
-								<Dashboard
-									setIsAuthenticated={setIsAuthenticated}
-								/>
-							) : (
-								<Navigate to="/login" />
-							)
-						}
-					/>
-					<Route
-						path="/"
-						element={
-							<Navigate
-								to={isAuthenticated ? "/dashboard" : "/login"}
+							<Dashboard
+								isAuthenticated={isAuthenticated}
+								setIsAuthenticated={setIsAuthenticated}
 							/>
 						}
 					/>
