@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
 const Dashboard = ({ isAuthenticated, setIsAuthenticated }) => {
-	// useNavigate hook for programmatic navigation
 	const navigate = useNavigate();
 	const [user, setUser] = useState(null);
 	const [ads, setAds] = useState([]);
@@ -15,14 +14,13 @@ const Dashboard = ({ isAuthenticated, setIsAuthenticated }) => {
 		phoneNumber: "",
 	});
 
-	// Function to fetch all public ads from the backend
 	const fetchAllAds = async () => {
 		try {
 			const response = await axios.get("http://localhost:8080/api/ads");
 			setAds(response.data);
 		} catch (error) {
 			console.error("Failed to fetch ads:", error);
-			// Optionally set an error state here to display to the user
+			// In a real app, you might set an error state to show a message to the user
 		}
 	};
 
@@ -33,11 +31,9 @@ const Dashboard = ({ isAuthenticated, setIsAuthenticated }) => {
 				setUser(JSON.parse(userData));
 			}
 		}
-		// Fetch all ads on component mount for all users
 		fetchAllAds();
 	}, [isAuthenticated]);
 
-	// Handle form input changes for the new ad
 	const handleAdChange = (e) => {
 		setNewAdData({
 			...newAdData,
@@ -45,11 +41,9 @@ const Dashboard = ({ isAuthenticated, setIsAuthenticated }) => {
 		});
 	};
 
-	// Handle the ad submission
 	const handleAdSubmit = async (e) => {
 		e.preventDefault();
 		try {
-			// Send the new ad data to the backend API
 			const token = localStorage.getItem("token");
 			await axios.post("http://localhost:8080/api/ads", newAdData, {
 				headers: {
@@ -57,7 +51,6 @@ const Dashboard = ({ isAuthenticated, setIsAuthenticated }) => {
 				},
 			});
 
-			// After successful submission, clear the form, hide it, and refresh the ad list
 			setNewAdData({
 				name: "",
 				description: "",
@@ -65,7 +58,7 @@ const Dashboard = ({ isAuthenticated, setIsAuthenticated }) => {
 				phoneNumber: "",
 			});
 			setShowAdForm(false);
-			fetchAllAds(); // Fetch the updated list of ads
+			fetchAllAds();
 			alert("Your ad has been posted!");
 		} catch (error) {
 			console.error("Failed to post ad:", error);
@@ -84,10 +77,8 @@ const Dashboard = ({ isAuthenticated, setIsAuthenticated }) => {
 
 	const handlePostAdClick = () => {
 		if (!isAuthenticated) {
-			// Redirect to login if not authenticated
 			navigate("/login");
 		} else {
-			// Show the ad creation form
 			setShowAdForm(true);
 		}
 	};
@@ -100,11 +91,18 @@ const Dashboard = ({ isAuthenticated, setIsAuthenticated }) => {
 					<div className="flex justify-between items-center py-6">
 						<div className="flex items-center">
 							<h1 className="text-3xl font-bold text-gray-900">
-								Culex Dashboard
+								Culex Marketplace
 							</h1>
 						</div>
 						<div className="flex items-center space-x-4">
-							{/* Conditional rendering for the top-right buttons */}
+							{/* New Post an Ad button */}
+							<button
+								onClick={handlePostAdClick}
+								className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+							>
+								Post an Ad
+							</button>
+							{/* Conditional rendering for profile or login/register */}
 							{isAuthenticated ? (
 								<>
 									<span className="text-gray-700">
@@ -141,19 +139,11 @@ const Dashboard = ({ isAuthenticated, setIsAuthenticated }) => {
 			{/* Main Content */}
 			<main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
 				<div className="px-4 py-6 sm:px-0">
-					<div className="border-4 border-dashed border-gray-200 rounded-lg p-8">
+					<div className="bg-white rounded-lg shadow-lg p-8">
 						<div className="text-center">
-							<h2 className="text-2xl font-bold text-gray-900 mb-4">
-								Welcome to Culex Marketplace
-							</h2>
-							<p className="text-gray-600 mb-8">
-								Your OLX for CU - Buy and sell with your
-								community!
-							</p>
-
 							{/* Conditional rendering for the ad posting form */}
 							{showAdForm ? (
-								<div className="bg-white shadow rounded-lg p-6 max-w-lg mx-auto">
+								<div className="max-w-lg mx-auto">
 									<h3 className="text-xl font-medium text-gray-900 mb-4">
 										Post a New Ad
 									</h3>
@@ -249,81 +239,35 @@ const Dashboard = ({ isAuthenticated, setIsAuthenticated }) => {
 								</div>
 							) : (
 								<>
-									{/* Quick Actions */}
-									<div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-										<div className="bg-white shadow rounded-lg p-6">
-											<h4 className="text-lg font-medium text-gray-900 mb-2">
-												Post an Ad
-											</h4>
-											<p className="text-gray-600 text-sm mb-4">
-												Sell your items to the CU
-												community
-											</p>
-											<button
-												onClick={handlePostAdClick}
-												className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded"
+									<h3 className="text-2xl font-bold text-gray-900 mb-6">
+										Recent Listings
+									</h3>
+									<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+										{ads.map((ad) => (
+											<div
+												key={ad.id}
+												className="bg-white rounded-lg shadow-md p-6"
 											>
-												Create Listing
-											</button>
-										</div>
-										<div className="bg-white shadow rounded-lg p-6">
-											<h4 className="text-lg font-medium text-gray-900 mb-2">
-												Browse Items
-											</h4>
-											<p className="text-gray-600 text-sm mb-4">
-												Find what you're looking for
-											</p>
-											<button className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-												View Listings
-											</button>
-										</div>
-										{isAuthenticated && (
-											<div className="bg-white shadow rounded-lg p-6">
-												<h4 className="text-lg font-medium text-gray-900 mb-2">
-													My Account
+												<h4 className="text-xl font-semibold text-gray-900 mb-2">
+													{ad.name}
 												</h4>
-												<p className="text-gray-600 text-sm mb-4">
-													Manage your profile and
-													settings
+												<p className="text-gray-600 mb-4">
+													{ad.description}
 												</p>
-												<button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">
-													Edit Profile
-												</button>
+												<p className="text-sm text-gray-500">
+													<span className="font-medium">
+														Seller Address:
+													</span>{" "}
+													{ad.address}
+												</p>
+												<p className="text-sm text-gray-500">
+													<span className="font-medium">
+														Contact:
+													</span>{" "}
+													{ad.phoneNumber}
+												</p>
 											</div>
-										)}
-									</div>
-									{/* Ads Display Section */}
-									<div className="mt-12">
-										<h3 className="text-2xl font-bold text-gray-900 mb-6">
-											Recent Listings
-										</h3>
-										<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-											{ads.map((ad) => (
-												<div
-													key={ad.id}
-													className="bg-white rounded-lg shadow-md p-6"
-												>
-													<h4 className="text-xl font-semibold text-gray-900 mb-2">
-														{ad.name}
-													</h4>
-													<p className="text-gray-600 mb-4">
-														{ad.description}
-													</p>
-													<p className="text-sm text-gray-500">
-														<span className="font-medium">
-															Seller Address:
-														</span>{" "}
-														{ad.address}
-													</p>
-													<p className="text-sm text-gray-500">
-														<span className="font-medium">
-															Contact:
-														</span>{" "}
-														{ad.phoneNumber}
-													</p>
-												</div>
-											))}
-										</div>
+										))}
 									</div>
 								</>
 							)}
