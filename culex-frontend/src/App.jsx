@@ -8,6 +8,8 @@ import { useState, useEffect } from "react";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import Dashboard from "./components/Dashboard";
+import Profile from "./components/Profile";
+import MyAds from "./components/MyAds";
 import "./App.css";
 
 function App() {
@@ -78,6 +80,29 @@ function App() {
 								isAuthenticated={isAuthenticated}
 								setIsAuthenticated={setIsAuthenticated}
 							/>
+						}
+					/>
+					<Route
+						path="/profile"
+						element={
+							isAuthenticated ? (
+								<Profile
+									isAuthenticated={isAuthenticated}
+									setIsAuthenticated={setIsAuthenticated}
+								/>
+							) : (
+								<Navigate to="/login" />
+							)
+						}
+					/>
+					<Route
+						path="/my-ads"
+						element={
+							isAuthenticated ? (
+								<MyAds />
+							) : (
+								<Navigate to="/login" />
+							)
 						}
 					/>
 				</Routes>

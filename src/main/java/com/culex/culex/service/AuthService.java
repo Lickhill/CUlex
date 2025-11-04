@@ -3,6 +3,7 @@ package com.culex.culex.service;
 import com.culex.culex.dto.AuthResponse;
 import com.culex.culex.dto.LoginRequest;
 import com.culex.culex.dto.RegisterRequest;
+import com.culex.culex.dto.UpdateProfileRequest;
 import com.culex.culex.model.User;
 import com.culex.culex.repository.UserRepository;
 import com.culex.culex.util.JwtUtil;
@@ -85,6 +86,58 @@ public class AuthService {
 
         } catch (Exception e) {
             return new AuthResponse("Login failed: " + e.getMessage());
+        }
+    }
+
+    public AuthResponse updateProfile(String email, UpdateProfileRequest request) {
+        try {
+            Optional<User> userOptional = userRepository.findByEmail(email);
+
+            if (userOptional.isEmpty()) {
+                return new AuthResponse("User not found");
+            }
+
+            User user = userOptional.get();
+
+            // Verify current password if trying to change password
+            if (request.getNewPassword() != null && !request.getNewPassword().isEmpty()) {
+                if (request.getCurrentPassword() == null || request.getCurrentPassword().isEmpty()) {
+                    return new AuthResponse("Current password is required to change password");
+                }
+
+                if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+                    return new AuthResponse("Current password is incorrect");
+                }
+
+                // Update password
+                user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+            }
+
+            // Update other fields
+            if (request.getFirstName() != null && !request.getFirstName().trim().isEmpty()) {
+                user.setFirstName(request.getFirstName().trim());
+            }
+
+            if (request.getLastName() != null && !request.getLastName().trim().isEmpty()) {
+                user.setLastName(request.getLastName().trim());
+            }
+
+            if (request.getPhoneNumber() != null) {
+                user.setPhoneNumber(request.getPhoneNumber().trim());
+            }
+
+            user.setUpdatedAt(java.time.LocalDateTime.now());
+            User updatedUser = userRepository.save(user);
+
+            return new AuthResponse(
+                    null, // No new token needed
+                    updatedUser.getEmail(),
+                    updatedUser.getFirstName(),
+                    updatedUser.getLastName(),
+                    "Profile updated successfully");
+
+        } catch (Exception e) {
+            return new AuthResponse("Profile update failed: " + e.getMessage());
         }
     }
 }

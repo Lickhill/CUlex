@@ -28,7 +28,9 @@ const Dashboard = ({ isAuthenticated, setIsAuthenticated }) => {
 		if (isAuthenticated) {
 			const userData = localStorage.getItem("user");
 			if (userData) {
-				setUser(JSON.parse(userData));
+				const parsedUser = JSON.parse(userData);
+				setUser(parsedUser);
+				console.log("Logged in User ID:", parsedUser.email);
 			}
 		}
 		fetchAllAds();
@@ -102,9 +104,24 @@ const Dashboard = ({ isAuthenticated, setIsAuthenticated }) => {
 							>
 								Post an Ad
 							</button>
+							{/* My Ads button - only show when authenticated */}
+							{isAuthenticated && (
+								<Link
+									to="/my-ads"
+									className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+								>
+									My Ads
+								</Link>
+							)}
 							{/* Conditional rendering for profile or login/register */}
 							{isAuthenticated ? (
 								<>
+									<Link
+										to="/profile"
+										className="text-indigo-600 hover:text-indigo-900 font-medium"
+									>
+										Profile
+									</Link>
 									<span className="text-gray-700">
 										Welcome, {user?.firstName}
 									</span>
